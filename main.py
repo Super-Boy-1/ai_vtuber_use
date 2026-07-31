@@ -1,5 +1,6 @@
 import os
 from typing import List,Dict
+from pathlib import Path
 from importlib.metadata import version
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -14,8 +15,15 @@ from ai_vtuber.tts_module import TTSInterface
 # ---------------------------------------------------------------------------
 load_dotenv()  # .env 放在 workspace 根目錄或此子目錄皆可
 
+# --------------------------------------------------------------------------
+# 系統根目錄
+ROOT_PATH = Path(__file__).parent
+
 # 必要的路徑與設定，若未提供則使用預設值
-WAV_PATH = os.getenv("REFERENCE_WAV_PATH","")
+if os.getenv("REFERENCE_WAV_PATH"):
+    WAV_PATH = str( ROOT_PATH / os.getenv("REFERENCE_WAV_PATH","") )
+else:
+    WAV_PATH = None
 AGENT_MODEL=os.getenv("MODEL","qwen2.5:7b")
 PROMPT=os.getenv("PROMPT",None)
 ASR_MODEL=os.getenv("ASR_MODEL","")
@@ -29,7 +37,6 @@ if PROMPT:
 tools = []
 asr   = ASR(model_name=ASR_MODEL)                                 # uses default model download logic
 tts   = TTSInterface(
-    reference_wav_path=WAV_PATH,
     cuda=True,
     )# enable GPU if available
 
@@ -76,7 +83,7 @@ async def chat_api(req: ChatRequest):
 async def tts_api(req: TTSRequest):
     """文字轉語音接口"""
     # 呼叫 TTS 物件的 tts 方法
-    result = tts.tts(req.text,play_audio=False)
+    result = tts.tts(req.text,WAV_PATH,play_audio=False)
     return {"audio": result}
 
 @app.post("/asr")
