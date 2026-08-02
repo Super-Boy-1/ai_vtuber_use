@@ -3,6 +3,8 @@ from typing import List,Dict
 from pathlib import Path
 from importlib.metadata import version
 from fastapi import FastAPI, HTTPException
+# 添加 CORS 中间件以允许跨域请求
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import numpy as np
@@ -50,6 +52,16 @@ app = FastAPI(
         "提供工具、語音辨識、文字轉語音與 LLM Agent 的 API，\n"
         "所有核心物件在啟動時已載入，可直接於路由中呼叫。"
     ),
+)
+
+# Configure CORS to allow any origin (adjust as needed for production)
+app.add_middleware(
+    CORSMiddleware,
+    # 配置 CORS，允許所有來源（可根據生產環境需求調整）
+    allow_origins=["*"],  # 允許所有來源
+    allow_credentials=True, # 是否允許跨域攜帶憑證（如 Cookie）
+    allow_methods=["*"],   # 允許的所有 HTTP 方法（如 GET, POST, OPTIONS 等）
+    allow_headers=["*"],   # 允許的 HTTP 標頭
 )
 
 agent_pools :Dict[str, agent]= {}
