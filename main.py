@@ -2,12 +2,16 @@ import os
 from typing import List,Dict
 from pathlib import Path
 from importlib.metadata import version
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import StreamingResponse
 # 添加 CORS 中间件以允许跨域请求
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import soundfile as sf
 import numpy as np
+import io
+import wave
 # ---------------------------------------------------------------------------
 from ai_vtuber import ALL_TOOLS, TOOLS_PACKAGE, agent
 from ai_vtuber.asr_module import ASR
@@ -96,7 +100,17 @@ async def tts_api(req: TTSRequest):
     """文字轉語音接口"""
     # 呼叫 TTS 物件的 tts 方法
     result = tts.tts(req.text,WAV_PATH,play_audio=False)
-    return {"audio": result}
+    samplerate = 24000  # 假設 TTS 模組輸出的取樣率為 24000 Hz
+    if result is None:
+        print("TTS 生成失敗，請參考以上原因")
+        raise HTTPException(status_code=500, detail="TTS 生成失敗")
+    # 轉換 ndarray 為 WAV 格式流
+    audio_buffer = io.BytesIO()
+    sf.write(audio_buffer, result, samplerate=samplerate,
+             format="WAV", subtype="PCM_16")
+
+    audio_buffer.seek(0)
+    return Response(content=audio_buffer.read(), media_type="audio/wav")
 
 @app.post("/asr")
 async def asr_api(req: ASRRequest):

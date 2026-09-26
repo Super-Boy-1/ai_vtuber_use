@@ -77,20 +77,34 @@ print(resp.json())
 
 ### 2. `/tts`
 
+以下方式即可得到音訊結果，可用於之後的其他應用(比如撥放音訊、其他)
+
 ```python
+# 需要確保已安裝 requests 跟 soundfile，沒有安裝可以考慮參考以下指令
+# pip install requests soundfile
+import io
 import requests
+import soundfile as sf
 
 url = "http://localhost:8000/tts"
 payload = {"text": "這是一段測試文字"}
 
-resp = requests.post(url, json=payload)
-print(resp.json())
+res = requests.post(url, json=payload)
+res.raise_for_status()                      # 非 2xx 直接抛异常
+
+arr, sr = sf.read(io.BytesIO(res.content), dtype="float32")
+# arr: NumPy ndarray, float32, 音訊的資料本體
+# sr:  采样率，如 24000
 ```
 
-回傳格式：
+播放音訊：
 
-```json
-{"audio": [0.0, 0.1, ...]}
+```python
+# 需要確保已安裝 sounddevice，沒有安裝可以考慮參考以下指令
+# pip install sounddevice
+import sounddevice as sd
+sd.play(arr, sr)
+sd.wait() 
 ```
 
 ### 3. `/asr`
