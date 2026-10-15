@@ -13,7 +13,7 @@ import numpy as np
 import io
 import wave
 # ---------------------------------------------------------------------------
-from ai_vtuber import ALL_TOOLS, TOOLS_PACKAGE, agent
+from ai_vtuber import ALL_TOOLS, TOOLS_PACKAGE, agent ,SqlMemory
 from ai_vtuber.asr_module import ASR
 from ai_vtuber.tts_module import TTSInterface
 # ---------------------------------------------------------------------------
@@ -34,6 +34,10 @@ AGENT_MODEL=os.getenv("MODEL","qwen2.5:7b")
 PROMPT=os.getenv("PROMPT",None)
 ASR_MODEL=os.getenv("ASR_MODEL","")
 MAX_MEMORY_ROUNDS=int(os.getenv("MAX_MEMORY_ROUNDS", 20))
+MEMORY_ROOT_PATH:Path = Path(os.getenv("MEMORY_ROOT_PATH", (ROOT_PATH / "memory") ) )
+INFORMATION_INTEGRATION_MODEL = os.getenv("INFORMATION_INTEGRATION_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
+
+
 agent_kwargs={}
 if PROMPT:
     agent_kwargs["prompt"]=PROMPT
@@ -68,7 +72,12 @@ app.add_middleware(
     allow_headers=["*"],   # 允許的 HTTP 標頭
 )
 
-agent_pools :Dict[str, agent]= {}
+class UserAI(BaseModel):
+    id: str
+    agent: agent
+    memory: SqlMemory
+
+agent_pools :Dict[str, UserAI]= {}
 
 # 並行處理的類別定義
 class ChatRequest(BaseModel):
@@ -85,14 +94,26 @@ class ASRRequest(BaseModel):
 @app.post("/chat")
 async def chat_api(req: ChatRequest):
     """AI Agent 聊天接口"""
+    #確認是否有身份(沒有就創建或載入)
     if req.user_id not in agent_pools:
-        agent_pools[req.user_id] = agent(
+        user_dir_path: Path = (MEMORY_ROOT_PATH / req.user_id )
+        user_dir_path.mkdir(parents=True,exist_ok=True)
+        db_path: Path = user_dir_path / "memory.sqlite"
+        memory = SqlMemory(
+            db_path = db_path,
+            model_name = INFORMATION_INTEGRATION_MODEL
+        )
+        ai=agent(
             **agent_kwargs,
             model=AGENT_MODEL,
             tools=tools,
             max_memory_rounds=MAX_MEMORY_ROUNDS,
+            long_term_memory=memory
         )
-    response = agent_pools[req.user_id].invoke(req.text)
+        agent_pools[req.user_id] = UserAI(id=req.user_id,agent=ai,memory=memory)
+
+    #推理並回傳
+    response = agent_pools[req.user_id].agent.invoke(req.text)
     return {"response": response}
 
 @app.post("/tts")
